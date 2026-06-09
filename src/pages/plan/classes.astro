@@ -1,8 +1,38 @@
 ---
+import { SignIn, UserButton } from '@clerk/astro/components'
 import { majors } from '../../data/majors'
+import { getDefaultTermTemplates, getPlannerState } from '../../lib/planner-db'
 
-const majorCode = Astro.url.searchParams.get('major')
-const selectedMajor = majors.find((major) => major.code === majorCode) ?? null
+const { isAuthenticated, userId } = Astro.locals.auth()
+const user = isAuthenticated ? await Astro.locals.currentUser() : null
+const requestedMajorCode = Astro.url.searchParams.get('major')
+const savedToken = Astro.url.searchParams.get('saved')
+
+let plannerState = null
+if (isAuthenticated && userId) {
+	try {
+		plannerState = await getPlannerState(userId, requestedMajorCode)
+	} catch {
+		plannerState = null
+	}
+}
+const majorCode = plannerState?.majorCode ?? requestedMajorCode ?? ''
+const majorName =
+	plannerState?.majorName ?? majors.find((major) => major.code === majorCode)?.name ?? 'Selected major'
+const courseGroups = plannerState?.groups ?? []
+const savedTerms = plannerState?.planner?.terms ?? []
+const defaultTerms = getDefaultTermTemplates()
+
+const termCards = defaultTerms.map((template) => {
+	const savedTerm = savedTerms.find((term) => term.order === template.order || term.label === template.label) ?? null
+	const checkedCourseCodes = new Set(savedTerm?.courses.map((course) => course.code) ?? [])
+
+	return {
+		template,
+		savedTerm,
+		checkedCourseCodes,
+	}
+})
 ---
 
 <html lang="en">
@@ -13,7 +43,7 @@ const selectedMajor = majors.find((major) => major.code === majorCode) ?? null
 		<title>Class Planning</title>
 		<meta
 			name="description"
-			content="Placeholder page for semester-by-semester class planning after selecting a major."
+			content="Select classes for each semester after choosing a major."
 		/>
 		<style>
 			:root {
@@ -59,7 +89,7 @@ const selectedMajor = majors.find((major) => major.code === majorCode) ?? null
 			}
 
 			.shell {
-				max-width: 1180px;
+				max-width: 1280px;
 				margin: 0 auto;
 				padding: 24px;
 			}
@@ -203,27 +233,27 @@ const selectedMajor = majors.find((major) => major.code === majorCode) ?? null
 				line-height: 1.6;
 			}
 
-			.semester-grid {
+			.term-stack {
 				display: grid;
-				gap: 14px;
+				gap: 18px;
 				margin-top: 24px;
 			}
 
-			.semester-card {
+			.term-card {
 				padding: 18px;
-				border-radius: 22px;
+				border-radius: 24px;
 				border: 1px solid rgba(148, 163, 184, 0.16);
 				background: var(--panel-soft);
 			}
 
-			.semester-card-head {
+			.term-card-head {
 				display: flex;
 				align-items: center;
 				justify-content: space-between;
 				gap: 12px;
 			}
 
-			.semester-card-head strong {
+			.term-card-head strong {
 				font-size: 1rem;
 			}
 
@@ -235,17 +265,138 @@ const selectedMajor = majors.find((major) => major.code === majorCode) ?? null
 				color: #e2e8f0;
 				font-size: 0.78rem;
 				font-weight: 700;
+				white-space: nowrap;
 			}
 
-			.semester-card p {
-				margin: 12px 0 0;
+			.term-meta {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 10px;
+				margin-top: 12px;
 				color: var(--muted);
-				line-height: 1.6;
+				font-size: 0.9rem;
+			}
+
+			.term-form {
+				display: grid;
+				gap: 16px;
+				margin-top: 16px;
+			}
+
+			.term-notes {
+				display: grid;
+				gap: 8px;
+			}
+
+			.term-notes label {
+				color: #e2e8f0;
+				font-size: 0.9rem;
+				font-weight: 700;
+			}
+
+			.term-notes textarea {
+				width: 100%;
+				min-height: 84px;
+				padding: 12px 14px;
+				border-radius: 18px;
+				border: 1px solid rgba(148, 163, 184, 0.18);
+				background: rgba(2, 6, 23, 0.55);
+				color: var(--text);
+				font: inherit;
+				resize: vertical;
+			}
+
+			.course-groups {
+				display: grid;
+				gap: 14px;
+			}
+
+			.course-group {
+				padding: 16px;
+				border-radius: 20px;
+				border: 1px solid rgba(148, 163, 184, 0.12);
+				background: rgba(255, 255, 255, 0.03);
+			}
+
+			.course-group h3 {
+				margin: 0 0 8px;
+				font-size: 0.98rem;
+			}
+
+			.course-group p {
+				margin: 0 0 12px;
+				color: var(--muted);
+				font-size: 0.9rem;
+				line-height: 1.5;
+			}
+
+			.course-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+				gap: 10px;
+			}
+
+			.course-option {
+				display: block;
+				cursor: pointer;
+			}
+
+			.course-option input {
+				position: absolute;
+				opacity: 0;
+				pointer-events: none;
+			}
+
+			.course-option-card {
+				display: grid;
+				gap: 6px;
+				padding: 12px 14px;
+				border-radius: 18px;
+				border: 1px solid rgba(148, 163, 184, 0.14);
+				background: rgba(2, 6, 23, 0.45);
+				transition:
+					transform 160ms ease,
+					border-color 160ms ease,
+					background 160ms ease;
+			}
+
+			.course-option:hover .course-option-card {
+				transform: translateY(-1px);
+				border-color: rgba(249, 115, 22, 0.3);
+				background: rgba(249, 115, 22, 0.08);
+			}
+
+			.course-option input:checked + .course-option-card {
+				border-color: rgba(249, 115, 22, 0.55);
+				background: rgba(249, 115, 22, 0.12);
+				box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.14);
+			}
+
+			.course-option-card strong {
+				font-size: 0.96rem;
+			}
+
+			.course-option-card span {
+				color: var(--muted);
+				font-size: 0.88rem;
+			}
+
+			.term-actions {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 12px;
+				align-items: center;
+				justify-content: space-between;
+			}
+
+			.term-actions .button {
+				min-width: 180px;
 			}
 
 			.sidebar {
 				display: grid;
 				gap: 18px;
+				align-content: start;
 			}
 
 			.checklist {
@@ -281,6 +432,14 @@ const selectedMajor = majors.find((major) => major.code === majorCode) ?? null
 				line-height: 1.6;
 			}
 
+			.empty-state {
+				padding: 20px;
+				border-radius: 22px;
+				border: 1px dashed rgba(148, 163, 184, 0.22);
+				color: var(--muted);
+				line-height: 1.6;
+			}
+
 			@media (max-width: 960px) {
 				.content {
 					grid-template-columns: 1fr;
@@ -312,85 +471,176 @@ const selectedMajor = majors.find((major) => major.code === majorCode) ?? null
 						</div>
 					</div>
 
-					<a class="button secondary" href="/">Back to setup</a>
+					{isAuthenticated ? (
+						<div class="user-chip">
+							<div>
+								<div style="font-size: 0.88rem; color: var(--muted);">Signed in as</div>
+								<div style="font-weight: 700;">{user?.firstName || user?.fullName || 'Student'}</div>
+							</div>
+							<UserButton showName={false} />
+						</div>
+					) : (
+						<a class="button secondary" href="/">Go to sign in</a>
+					)}
 				</header>
 
-				<div class="content">
-					<section class="panel">
-						<span class="kicker">Coming next</span>
-						<h1>
-							{selectedMajor ? `Build your ${selectedMajor.name} class plan` : 'Build your class plan'}
-						</h1>
-						<p class="lead">
-							This page is the next step after major selection. It will become the semester-by-semester class picker where
-							you assign courses to fall, spring, and summer terms.
-						</p>
+				{isAuthenticated ? (
+					<div class="content">
+						<section class="panel">
+							<span class="kicker">Semester builder</span>
+							<h1>{majorName}</h1>
+							<p class="lead">
+								Add classes to each term, save the selections, and keep building out the degree plan one semester at a time.
+							</p>
 
-						<div class="hero-actions">
-							<a class="button primary" href="/">Change major</a>
-							<a class="button secondary" href="#semester-picker">Preview structure</a>
-						</div>
-
-						{selectedMajor ? (
-							<div class="major-banner">
-								<strong>{selectedMajor.name}</strong>
-								<p>
-									Selected major code: {selectedMajor.code}. The final planner will use this choice to load the right
-									requirement groups and course options.
-								</p>
+							<div class="hero-actions">
+								<a class="button secondary" href="/">Back to dashboard</a>
+								<a class="button primary" href="#terms">Edit terms</a>
 							</div>
-						) : (
-							<div class="major-banner">
-								<strong>No major selected</strong>
-								<p>
-									Return to the setup flow and choose a major first. The planner will route here once that selection is
-									made.
-								</p>
-							</div>
-						)}
 
-						<div class="semester-grid" id="semester-picker">
-							{['Fall', 'Spring', 'Summer'].map((term) => (
-								<article class="semester-card">
-									<div class="semester-card-head">
-										<strong>{term} term</strong>
-										<span class="badge">Planned</span>
-									</div>
+							{savedToken ? (
+								<div class="major-banner">
+									<strong>Saved</strong>
 									<p>
-										Placeholder for the future class picker. This will eventually list eligible courses, prerequisites,
-										credit totals, and conflict checks for the selected major.
+										Your last update was stored successfully. You can continue editing any term below.
 									</p>
-								</article>
-							))}
-						</div>
-					</section>
+								</div>
+							) : null}
 
-					<aside class="sidebar">
-						<div class="panel">
-							<span class="kicker">Flow</span>
-							<h2 style="margin: 16px 0 10px; letter-spacing: -0.03em;">Onboarding sequence</h2>
-							<p class="note">
-								Choose a major first, then continue to the semester builder. This page is the handoff point where future
-								class selection will live.
+							<div class="major-banner">
+								<strong>Selected major: {majorCode || 'Not set'}</strong>
+								<p>
+									The forms below write to `student_plans`, `student_terms`, and `student_term_courses` in the database.
+								</p>
+							</div>
+
+							<div class="term-stack" id="terms">
+								{termCards.map(({ template, savedTerm, checkedCourseCodes }) => (
+									<article class="term-card">
+										<div class="term-card-head">
+											<div>
+												<strong>{template.label}</strong>
+												<div class="term-meta">
+													<span>Term order {template.order}</span>
+													<span>{template.year}</span>
+												</div>
+											</div>
+											<span class="badge">{savedTerm ? `${savedTerm.courses.length} saved` : 'New term'}</span>
+										</div>
+
+										<form class="term-form" method="post" action="/api/plans/terms">
+											<input type="hidden" name="majorCode" value={majorCode} />
+											<input type="hidden" name="termLabel" value={template.label} />
+											<input type="hidden" name="termOrder" value={template.order} />
+											<input type="hidden" name="termYear" value={template.year} />
+
+											<div class="term-notes">
+												<label for={`notes-${template.order}`}>Term notes</label>
+												<textarea
+													id={`notes-${template.order}`}
+													name="termNotes"
+													placeholder="Add a note for this semester"
+												>{savedTerm?.notes ?? ''}</textarea>
+											</div>
+
+											{courseGroups.length > 0 ? (
+												<div class="course-groups">
+													{courseGroups.map((group) => (
+														<div class="course-group">
+															<h3>{group.requirementGroup}</h3>
+															<p>
+																{group.requirementType}
+																{group.requiredCredits ? ` · ${group.requiredCredits} credits required` : ''}
+															</p>
+
+															<div class="course-grid">
+																{group.courses.map((course) => (
+																	<label class="course-option">
+																		<input
+																			type="checkbox"
+																			name="courseCodes"
+																			value={course.code}
+																			checked={checkedCourseCodes.has(course.code)}
+																		/>
+																		<div class="course-option-card">
+																			<strong>{course.code}</strong>
+																			<span>{course.title}</span>
+																			<span>{course.credits} credits</span>
+																		</div>
+																	</label>
+																))}
+															</div>
+														</div>
+													))}
+												</div>
+											) : (
+												<div class="empty-state">
+													No course groups are available yet. Choose a major on the home page or confirm that your plan was
+													saved correctly.
+												</div>
+											)}
+
+											<div class="term-actions">
+												<span class="note">
+													{savedTerm
+														? `Last saved with ${savedTerm.courses.length} classes.`
+														: 'Select the classes you want for this term and save them to the database.'}
+												</span>
+												<button class="button primary" type="submit">Save term</button>
+											</div>
+										</form>
+									</article>
+								))}
+							</div>
+						</section>
+
+						<aside class="sidebar">
+							<div class="panel">
+								<span class="kicker">Flow</span>
+								<h2 style="margin: 16px 0 10px; letter-spacing: -0.03em;">How it works</h2>
+								<p class="note">
+									Each form updates one semester at a time. The API stores the selected major, creates or updates the
+									term record, and rewrites the class list for that term.
+								</p>
+
+								<ul class="checklist">
+									<li><span class="dot"></span> Major saved to the active student plan</li>
+									<li><span class="dot"></span> Each term persists independently</li>
+									<li><span class="dot"></span> Selected classes are validated against the major</li>
+								</ul>
+							</div>
+
+							<div class="panel">
+								<span class="kicker">Database</span>
+								<h2 style="margin: 16px 0 10px; letter-spacing: -0.03em;">Seed schema aligned</h2>
+								<p class="note">
+									This page matches the tables defined in `scripts/init-db.sql`, including `majors`, `student_plans`,
+									`student_terms`, and `student_term_courses`.
+								</p>
+							</div>
+						</aside>
+					</div>
+				) : (
+					<div class="content">
+						<section class="panel">
+							<span class="kicker">Sign in required</span>
+							<h1>Open your planner</h1>
+							<p class="lead">
+								Sign in to choose a major, then start adding classes for each term.
 							</p>
 
-							<ul class="checklist">
-								<li><span class="dot"></span> Major selected from the seeded majors list</li>
-								<li><span class="dot"></span> Semester structure prepared for course assignment</li>
-								<li><span class="dot"></span> Future step: save each class to a term</li>
-							</ul>
-						</div>
+							<div class="hero-actions">
+								<a class="button primary" href="/">Return home</a>
+							</div>
+						</section>
 
-						<div class="panel">
-							<span class="kicker">Data model</span>
-							<h2 style="margin: 16px 0 10px; letter-spacing: -0.03em;">Matches the seed schema</h2>
-							<p class="note">
-								This page is aligned with the `majors`, `student_plans`, and `student_terms` tables in
-								`scripts/init-db.sql`, so the eventual save flow can use the same structure.
-							</p>
-						</div>
-					</aside>
-				</div>
+						<aside class="panel">
+							<div style="margin-bottom: 12px;">
+								<SignIn fallbackRedirectUrl="/plan/classes" />
+							</div>
+						</aside>
+					</div>
+				)}
 			</div>
 		</main>
 	</body>

@@ -1,13 +1,23 @@
 ---
 import { SignIn, UserButton } from '@clerk/astro/components'
 import { majors } from '../data/majors'
+import { getPlannerState } from '../lib/planner-db'
 
-const { isAuthenticated } = Astro.locals.auth()
+const { isAuthenticated, userId } = Astro.locals.auth()
 const user = isAuthenticated ? await Astro.locals.currentUser() : null
 
-const majorCode = Astro.url.searchParams.get('major')
-const selectedMajor = majors.find((major) => major.code === majorCode) ?? null
-const hasMajor = Boolean(selectedMajor)
+let plannerState = null
+if (isAuthenticated && userId) {
+	try {
+		plannerState = await getPlannerState(userId)
+	} catch {
+		plannerState = null
+	}
+}
+const selectedMajor = plannerState?.majorCode
+	? majors.find((major) => major.code === plannerState.majorCode) ?? null
+	: null
+const hasMajor = Boolean(plannerState?.planner)
 
 const semesters = [
 	{
@@ -60,8 +70,8 @@ const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') 
 const emailAddress = user?.emailAddresses?.[0]?.emailAddress
 const showDashboard = isAuthenticated && hasMajor
 const showOnboarding = isAuthenticated && !hasMajor
-const selectedMajorName = selectedMajor?.name ?? 'degree plan'
-const selectedMajorCode = selectedMajor?.code ?? ''
+const selectedMajorName = plannerState?.majorName ?? selectedMajor?.name ?? 'degree plan'
+const selectedMajorCode = plannerState?.majorCode ?? selectedMajor?.code ?? ''
 ---
 
 <html lang="en">
@@ -1039,11 +1049,11 @@ const selectedMajorCode = selectedMajor?.code ?? ''
 								</p>
 							</div>
 
-							<form class="major-form" action="/plan/classes" method="get">
+							<form class="major-form" action="/api/onboarding/major" method="post">
 								<div class="major-grid">
 									{majors.map((major) => (
 										<label class="major-card">
-											<input type="radio" name="major" value={major.code} required />
+											<input type="radio" name="majorCode" value={major.code} required />
 											<div class="major-card-inner">
 												<div class="major-card-head">
 													<strong>{major.name}</strong>
