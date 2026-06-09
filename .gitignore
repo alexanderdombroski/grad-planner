@@ -17,6 +17,9 @@ pnpm-debug.log*
 .env
 .env.production
 
+# generated course content
+src/content/courses/*.json
+
 # macOS-specific files
 .DS_Store
 
