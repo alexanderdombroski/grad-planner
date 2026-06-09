@@ -1,8 +1,13 @@
 ---
 import { SignIn, UserButton } from '@clerk/astro/components'
+import { majors } from '../data/majors'
 
 const { isAuthenticated } = Astro.locals.auth()
 const user = isAuthenticated ? await Astro.locals.currentUser() : null
+
+const majorCode = Astro.url.searchParams.get('major')
+const selectedMajor = majors.find((major) => major.code === majorCode) ?? null
+const hasMajor = Boolean(selectedMajor)
 
 const semesters = [
 	{
@@ -53,6 +58,10 @@ const upcomingSemester = semesters.find((semester) => semester.status === 'Plann
 const degreeStatus = 'On track for a 2027 graduation window'
 const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || 'Student'
 const emailAddress = user?.emailAddresses?.[0]?.emailAddress
+const showDashboard = isAuthenticated && hasMajor
+const showOnboarding = isAuthenticated && !hasMajor
+const selectedMajorName = selectedMajor?.name ?? 'degree plan'
+const selectedMajorCode = selectedMajor?.code ?? ''
 ---
 
 <html lang="en">
@@ -557,6 +566,89 @@ const emailAddress = user?.emailAddresses?.[0]?.emailAddress
 				padding: 18px;
 			}
 
+			.major-form {
+				display: grid;
+				gap: 18px;
+			}
+
+			.major-grid {
+				display: grid;
+				gap: 14px;
+			}
+
+			.major-card {
+				display: block;
+				cursor: pointer;
+			}
+
+			.major-card input {
+				position: absolute;
+				opacity: 0;
+				pointer-events: none;
+			}
+
+			.major-card-inner {
+				display: grid;
+				gap: 10px;
+				padding: 18px;
+				border-radius: 22px;
+				border: 1px solid rgba(148, 163, 184, 0.16);
+				background: rgba(255, 255, 255, 0.03);
+				transition:
+					transform 160ms ease,
+					border-color 160ms ease,
+					background 160ms ease;
+			}
+
+			.major-card:hover .major-card-inner {
+				transform: translateY(-1px);
+				border-color: rgba(249, 115, 22, 0.35);
+				background: rgba(249, 115, 22, 0.06);
+			}
+
+			.major-card input:checked + .major-card-inner,
+			.major-card:focus-within .major-card-inner {
+				border-color: rgba(249, 115, 22, 0.55);
+				box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.18);
+				background: rgba(249, 115, 22, 0.1);
+			}
+
+			.major-card-head {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 12px;
+			}
+
+			.major-card-head strong {
+				font-size: 1.05rem;
+			}
+
+			.major-card-head span {
+				padding: 6px 10px;
+				border-radius: 999px;
+				background: rgba(255, 255, 255, 0.06);
+				border: 1px solid rgba(148, 163, 184, 0.12);
+				color: #e2e8f0;
+				font-size: 0.78rem;
+				font-weight: 700;
+			}
+
+			.major-card p {
+				margin: 0;
+				color: var(--muted);
+				line-height: 1.6;
+			}
+
+			.major-hint {
+				color: #dbeafe;
+				font-size: 0.9rem;
+			}
+
+			.major-submit {
+				width: 100%;
+			}
+
 			.auth-card .auth-shell {
 				padding: 12px;
 				border-radius: 22px;
@@ -737,15 +829,15 @@ const emailAddress = user?.emailAddresses?.[0]?.emailAddress
 					)}
 				</header>
 
-				{isAuthenticated ? (
+				{showDashboard ? (
 					<>
 						<section class="hero">
 							<div class="panel hero-panel">
-								<span class="kicker">Academic dashboard</span>
+								<span class="kicker">{selectedMajorName !== 'degree plan' ? selectedMajorName : 'Academic dashboard'}</span>
 								<h1>{user?.firstName ? `Welcome back, ${user.firstName}` : 'Welcome back'}</h1>
 								<p class="lead">
-									Track the semesters in your degree plan, keep your graduation path visible, and spot heavy-load terms
-									before they surprise you.
+									Track the semesters in your {selectedMajorName.toLowerCase()}, keep your graduation path
+									visible, and spot heavy-load terms before they surprise you.
 								</p>
 
 								<div class="hero-actions">
@@ -762,7 +854,9 @@ const emailAddress = user?.emailAddresses?.[0]?.emailAddress
 									<div class="metric">
 										<span class="metric-label">Degree status</span>
 										<strong>{degreeStatus}</strong>
-										<span>{currentSemester?.name} is the active term</span>
+										<span>
+											{currentSemester?.name} is the active term for {selectedMajorCode}
+										</span>
 									</div>
 									<div class="metric">
 										<span class="metric-label">Next checkpoint</span>
@@ -813,7 +907,7 @@ const emailAddress = user?.emailAddresses?.[0]?.emailAddress
 							<div class="section-head">
 								<div>
 									<h2>Your semesters</h2>
-									<p>A clean semester-by-semester view of the plan you are carrying toward graduation.</p>
+										<p>A clean semester-by-semester view of the plan you are carrying toward graduation.</p>
 								</div>
 								<p>{semesters.length} terms mapped</p>
 							</div>
@@ -860,8 +954,9 @@ const emailAddress = user?.emailAddresses?.[0]?.emailAddress
 								<div class="panel summary-card">
 									<h2>Degree summary</h2>
 									<p style="margin: 0; color: var(--muted); line-height: 1.6;">
-										This dashboard gives you a quick read on where each term sits in the full graduation path, so you can
-										adjust credits, add electives, or shift heavy classes before the schedule hardens.
+										This dashboard gives you a quick read on where each term sits in the full graduation path for
+										{selectedMajor?.name}, so you can adjust credits, add electives, or shift heavy classes before the schedule
+										hardens.
 									</p>
 
 									<ul>
@@ -905,6 +1000,72 @@ const emailAddress = user?.emailAddresses?.[0]?.emailAddress
 							</div>
 						</section>
 					</>
+				) : showOnboarding ? (
+					<section class="hero">
+						<div class="panel hero-panel">
+							<span class="kicker">Getting started</span>
+							<h1>Pick your major</h1>
+							<p class="lead">
+								Your plan starts with a major. Choose the program you are pursuing, then continue to the semester class
+								picker that will be built next.
+							</p>
+
+							<div class="hero-actions">
+								<a class="button secondary" href="#major-picker">Choose a major</a>
+								<a class="button primary" href="#major-picker">Continue setup</a>
+							</div>
+
+							<div class="metrics">
+								<div class="metric">
+									<span class="metric-label">Schema source</span>
+									<strong>majors table</strong>
+									<span>Matches the `majors` records seeded in `scripts/init-db.sql`</span>
+								</div>
+								<div class="metric">
+									<span class="metric-label">Next step</span>
+									<strong>Class picker</strong>
+									<span>We’ll route you to the semester planning page after selection</span>
+								</div>
+							</div>
+						</div>
+
+						<div class="panel auth-card" id="major-picker">
+							<div class="auth-intro">
+								<span class="kicker">Major selection</span>
+								<h2>Start with the degree you want</h2>
+								<p>
+									This choice will anchor your `student_plans.major_id` record later. For now, it directs you to the next
+									planning step with the selected major already in place.
+								</p>
+							</div>
+
+							<form class="major-form" action="/plan/classes" method="get">
+								<div class="major-grid">
+									{majors.map((major) => (
+										<label class="major-card">
+											<input type="radio" name="major" value={major.code} required />
+											<div class="major-card-inner">
+												<div class="major-card-head">
+													<strong>{major.name}</strong>
+													<span>{major.code}</span>
+												</div>
+												<p>{major.description}</p>
+												<div class="major-hint">{major.routeHint}</div>
+											</div>
+										</label>
+									))}
+								</div>
+
+								<button class="button primary major-submit" type="submit">Continue to class planning</button>
+							</form>
+
+							<ul class="auth-list">
+								<li><span class="dot"></span> Pick a major first, then classes later</li>
+								<li><span class="dot"></span> Structured around the seeded majors in the SQL init script</li>
+								<li><span class="dot"></span> Ready to connect to real student plan data</li>
+							</ul>
+						</div>
+					</section>
 				) : (
 					<section class="hero">
 						<div class="panel hero-panel">
