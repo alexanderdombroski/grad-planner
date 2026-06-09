@@ -1,4 +1,5 @@
 import { defineCollection, z } from 'astro:content'
+import { glob } from 'astro/loaders'
 
 const coursePrerequisiteSchema = z.object({
   courseCode: z.string(),
@@ -17,6 +18,10 @@ const courseRequirementSchema = z.object({
 
 const courses = defineCollection({
   type: 'data',
+  loader: glob({
+    pattern: '*.json',
+    base: './src/content/courses',
+  }),
   schema: z.object({
     slug: z.string(),
     courseCode: z.string(),
