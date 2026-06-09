@@ -1,5 +1,58 @@
 ---
+import { SignIn, UserButton } from '@clerk/astro/components'
 
+const { isAuthenticated } = Astro.locals.auth()
+const user = isAuthenticated ? await Astro.locals.currentUser() : null
+
+const semesters = [
+	{
+		name: 'Fall 2026',
+		status: 'Current',
+		credits: 15,
+		progress: 72,
+		courses: ['Algorithms', 'Database Systems', 'Capstone Seminar', 'Elective: Design'],
+		note: 'Core major requirements + capstone prep',
+		accentStart: '#f97316',
+		accentEnd: '#fb7185',
+	},
+	{
+		name: 'Spring 2027',
+		status: 'Planned',
+		credits: 16,
+		progress: 38,
+		courses: ['Operating Systems', 'Networks', 'Senior Project I', 'Math Elective'],
+		note: 'Heavy systems term with project work',
+		accentStart: '#2563eb',
+		accentEnd: '#22c55e',
+	},
+	{
+		name: 'Summer 2027',
+		status: 'Optional',
+		credits: 6,
+		progress: 18,
+		courses: ['Internship Credit', 'Research Reading'],
+		note: 'Use for internship or lighter load',
+		accentStart: '#14b8a6',
+		accentEnd: '#0f766e',
+	},
+	{
+		name: 'Fall 2027',
+		status: 'Final Stretch',
+		credits: 12,
+		progress: 55,
+		courses: ['Senior Project II', 'Advanced Elective', 'Audit Requirement'],
+		note: 'Finish degree checklist and graduate audit',
+		accentStart: '#8b5cf6',
+		accentEnd: '#ec4899',
+	},
+]
+
+const totalCredits = semesters.reduce((sum, semester) => sum + semester.credits, 0)
+const currentSemester = semesters.find((semester) => semester.status === 'Current')
+const upcomingSemester = semesters.find((semester) => semester.status === 'Planned')
+const degreeStatus = 'On track for a 2027 graduation window'
+const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || 'Student'
+const emailAddress = user?.emailAddresses?.[0]?.emailAddress
 ---
 
 <html lang="en">
@@ -7,11 +60,914 @@
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
+		<title>Grad Planner Dashboard</title>
+		<meta
+			name="description"
+			content="A grad planner dashboard for tracking college semesters and graduation progress."
+		/>
+		<style>
+			:root {
+				color-scheme: dark;
+				--bg: #07111f;
+				--bg-soft: rgba(10, 16, 30, 0.76);
+				--panel: rgba(17, 24, 39, 0.72);
+				--panel-strong: rgba(15, 23, 42, 0.9);
+				--border: rgba(148, 163, 184, 0.18);
+				--text: #f8fafc;
+				--muted: #94a3b8;
+				--accent: #f97316;
+				--accent-2: #38bdf8;
+				--shadow: 0 30px 80px rgba(2, 6, 23, 0.45);
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html {
+				background:
+					radial-gradient(circle at top left, rgba(249, 115, 22, 0.22), transparent 34%),
+					radial-gradient(circle at 85% 18%, rgba(56, 189, 248, 0.16), transparent 28%),
+					linear-gradient(180deg, #07111f 0%, #09101c 45%, #050814 100%);
+				min-height: 100%;
+			}
+
+			body {
+				margin: 0;
+				min-height: 100vh;
+				font-family:
+					"Inter",
+					"Segoe UI",
+					"Helvetica Neue",
+					Arial,
+					sans-serif;
+				color: var(--text);
+			}
+
+			a {
+				color: inherit;
+				text-decoration: none;
+			}
+
+			.shell {
+				max-width: 1280px;
+				margin: 0 auto;
+				padding: 24px;
+			}
+
+			.frame {
+				position: relative;
+				overflow: hidden;
+				border: 1px solid var(--border);
+				border-radius: 32px;
+				background: linear-gradient(180deg, rgba(15, 23, 42, 0.82), rgba(2, 6, 23, 0.9));
+				box-shadow: var(--shadow);
+				backdrop-filter: blur(18px);
+			}
+
+			.frame::before {
+				content: '';
+				position: absolute;
+				inset: 0;
+				background:
+					linear-gradient(120deg, transparent 20%, rgba(255, 255, 255, 0.05) 50%, transparent 80%),
+					radial-gradient(circle at top right, rgba(249, 115, 22, 0.18), transparent 28%);
+				pointer-events: none;
+			}
+
+			.topbar {
+				position: relative;
+				z-index: 1;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 16px;
+				padding: 24px 28px 0;
+			}
+
+			.brand {
+				display: flex;
+				align-items: center;
+				gap: 14px;
+			}
+
+			.brand-mark {
+				display: grid;
+				place-items: center;
+				width: 46px;
+				height: 46px;
+				border-radius: 15px;
+				background: linear-gradient(135deg, #f97316, #fb7185 60%, #38bdf8);
+				color: #fff;
+				font-size: 1.15rem;
+				font-weight: 800;
+				box-shadow: 0 14px 40px rgba(249, 115, 22, 0.35);
+			}
+
+			.brand-copy {
+				display: grid;
+				gap: 4px;
+			}
+
+			.brand-copy span {
+				color: var(--muted);
+				font-size: 0.92rem;
+			}
+
+			.brand-copy strong {
+				font-size: 1.08rem;
+				letter-spacing: 0.02em;
+			}
+
+			.user-chip {
+				display: flex;
+				align-items: center;
+				gap: 14px;
+				padding: 10px 14px;
+				border: 1px solid var(--border);
+				border-radius: 999px;
+				background: rgba(15, 23, 42, 0.58);
+			}
+
+			.hero {
+				position: relative;
+				z-index: 1;
+				display: grid;
+				grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+				gap: 24px;
+				padding: 24px 28px 28px;
+			}
+
+			.panel {
+				border: 1px solid var(--border);
+				border-radius: 28px;
+				background: var(--panel);
+				box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+			}
+
+			.panel.hero-panel {
+				padding: 28px;
+				background:
+					linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.65)),
+					radial-gradient(circle at top right, rgba(249, 115, 22, 0.18), transparent 30%);
+			}
+
+			.kicker {
+				display: inline-flex;
+				align-items: center;
+				gap: 10px;
+				padding: 8px 12px;
+				border-radius: 999px;
+				background: rgba(249, 115, 22, 0.12);
+				color: #fdba74;
+				font-size: 0.84rem;
+				font-weight: 700;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+			}
+
+			h1 {
+				margin: 18px 0 10px;
+				font-size: clamp(2.4rem, 5vw, 4.4rem);
+				line-height: 0.97;
+				letter-spacing: -0.05em;
+				max-width: 12ch;
+			}
+
+			.lead {
+				max-width: 58ch;
+				margin: 0;
+				color: var(--muted);
+				font-size: 1.02rem;
+				line-height: 1.7;
+			}
+
+			.hero-actions {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 12px;
+				margin-top: 24px;
+			}
+
+			.button {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				gap: 10px;
+				padding: 12px 18px;
+				border-radius: 999px;
+				border: 1px solid transparent;
+				font-weight: 700;
+				transition:
+					transform 160ms ease,
+					border-color 160ms ease,
+					background 160ms ease;
+			}
+
+			.button:hover {
+				transform: translateY(-1px);
+			}
+
+			.button.primary {
+				background: linear-gradient(135deg, #f97316, #fb7185);
+				color: white;
+				box-shadow: 0 16px 36px rgba(249, 115, 22, 0.24);
+			}
+
+			.button.secondary {
+				border-color: var(--border);
+				background: rgba(255, 255, 255, 0.03);
+				color: var(--text);
+			}
+
+			.metrics {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 14px;
+				margin-top: 28px;
+			}
+
+			.metric {
+				padding: 18px;
+				border-radius: 22px;
+				background: rgba(2, 6, 23, 0.45);
+				border: 1px solid rgba(148, 163, 184, 0.16);
+			}
+
+			.metric-label {
+				display: block;
+				color: var(--muted);
+				font-size: 0.86rem;
+				margin-bottom: 10px;
+			}
+
+			.metric strong {
+				display: block;
+				font-size: 1.45rem;
+				line-height: 1.1;
+			}
+
+			.metric span {
+				display: block;
+				margin-top: 8px;
+				color: var(--muted);
+				font-size: 0.92rem;
+			}
+
+			.side-stack {
+				display: grid;
+				gap: 16px;
+			}
+
+			.side-card {
+				padding: 20px;
+			}
+
+			.side-card h2 {
+				margin: 0 0 8px;
+				font-size: 1.1rem;
+			}
+
+			.side-card p {
+				margin: 0;
+				color: var(--muted);
+				line-height: 1.6;
+			}
+
+			.progress {
+				margin-top: 18px;
+				height: 12px;
+				border-radius: 999px;
+				background: rgba(148, 163, 184, 0.14);
+				overflow: hidden;
+			}
+
+			.progress > span {
+				display: block;
+				height: 100%;
+				border-radius: inherit;
+				background: linear-gradient(90deg, #f97316, #fb7185, #38bdf8);
+			}
+
+			.tag-row {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 10px;
+				margin-top: 16px;
+			}
+
+			.tag {
+				display: inline-flex;
+				align-items: center;
+				gap: 8px;
+				padding: 9px 12px;
+				border-radius: 999px;
+				background: rgba(255, 255, 255, 0.04);
+				border: 1px solid rgba(148, 163, 184, 0.16);
+				color: #dbeafe;
+				font-size: 0.88rem;
+			}
+
+			.section {
+				position: relative;
+				z-index: 1;
+				padding: 0 28px 28px;
+			}
+
+			.section-head {
+				display: flex;
+				align-items: end;
+				justify-content: space-between;
+				gap: 20px;
+				margin-bottom: 16px;
+			}
+
+			.section-head h2 {
+				margin: 0;
+				font-size: 1.35rem;
+				letter-spacing: -0.03em;
+			}
+
+			.section-head p {
+				margin: 0;
+				color: var(--muted);
+			}
+
+			.semesters {
+				display: grid;
+				grid-template-columns: repeat(12, minmax(0, 1fr));
+				gap: 16px;
+			}
+
+			.semester {
+				grid-column: span 3;
+				position: relative;
+				overflow: hidden;
+				padding: 20px;
+				border-radius: 24px;
+				border: 1px solid var(--border);
+				background:
+					linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.88)),
+					radial-gradient(circle at top right, rgba(249, 115, 22, 0.18), transparent 30%);
+			}
+
+			.semester::before {
+				content: '';
+				position: absolute;
+				inset: auto 0 0 0;
+				height: 5px;
+				background: linear-gradient(90deg, var(--semester-a, #f97316), var(--semester-b, #38bdf8));
+			}
+
+			.semester-header {
+				display: flex;
+				align-items: start;
+				justify-content: space-between;
+				gap: 12px;
+			}
+
+			.semester h3 {
+				margin: 0;
+				font-size: 1.1rem;
+			}
+
+			.badge {
+				padding: 7px 10px;
+				border-radius: 999px;
+				background: rgba(255, 255, 255, 0.06);
+				border: 1px solid rgba(148, 163, 184, 0.16);
+				color: #e2e8f0;
+				font-size: 0.78rem;
+				font-weight: 700;
+				white-space: nowrap;
+			}
+
+			.credits {
+				margin: 16px 0 12px;
+				font-size: 1.95rem;
+				font-weight: 800;
+				letter-spacing: -0.04em;
+			}
+
+			.credits small {
+				font-size: 0.9rem;
+				font-weight: 600;
+				color: var(--muted);
+			}
+
+			.semester p {
+				margin: 0;
+				color: var(--muted);
+				line-height: 1.6;
+			}
+
+			.course-list {
+				display: grid;
+				gap: 8px;
+				margin: 16px 0 0;
+				padding: 0;
+				list-style: none;
+			}
+
+			.course-list li {
+				padding: 10px 12px;
+				border-radius: 14px;
+				background: rgba(255, 255, 255, 0.03);
+				border: 1px solid rgba(148, 163, 184, 0.12);
+				color: #e2e8f0;
+				font-size: 0.92rem;
+			}
+
+			.semester-progress {
+				margin-top: 18px;
+			}
+
+			.semester-progress .track {
+				margin-top: 10px;
+				height: 10px;
+				border-radius: 999px;
+				background: rgba(148, 163, 184, 0.12);
+				overflow: hidden;
+			}
+
+			.semester-progress .track span {
+				display: block;
+				height: 100%;
+				border-radius: inherit;
+				background: linear-gradient(90deg, var(--semester-a, #f97316), var(--semester-b, #38bdf8));
+			}
+
+			.dashboard-grid {
+				display: grid;
+				grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.6fr);
+				gap: 16px;
+				margin-top: 16px;
+			}
+
+			.summary-card {
+				padding: 22px;
+			}
+
+			.summary-card h2 {
+				margin: 0 0 10px;
+				font-size: 1.15rem;
+			}
+
+			.summary-card ul {
+				margin: 14px 0 0;
+				padding: 0;
+				list-style: none;
+				display: grid;
+				gap: 12px;
+			}
+
+			.summary-card li {
+				display: flex;
+				align-items: start;
+				justify-content: space-between;
+				gap: 18px;
+				padding: 14px 16px;
+				border-radius: 18px;
+				background: rgba(255, 255, 255, 0.03);
+				border: 1px solid rgba(148, 163, 184, 0.12);
+			}
+
+			.summary-card li strong {
+				display: block;
+				font-size: 0.95rem;
+			}
+
+			.summary-card li span {
+				display: block;
+				color: var(--muted);
+				font-size: 0.88rem;
+				margin-top: 4px;
+			}
+
+			.summary-card li em {
+				font-style: normal;
+				color: #dbeafe;
+				font-weight: 700;
+				white-space: nowrap;
+			}
+
+			.auth-card {
+				padding: 18px;
+			}
+
+			.auth-card .auth-shell {
+				padding: 12px;
+				border-radius: 22px;
+				background: rgba(2, 6, 23, 0.52);
+				border: 1px solid rgba(148, 163, 184, 0.14);
+			}
+
+			.auth-intro {
+				display: grid;
+				gap: 10px;
+				margin-bottom: 16px;
+			}
+
+			.auth-intro h2 {
+				margin: 0;
+				font-size: 1.4rem;
+			}
+
+			.auth-intro p {
+				margin: 0;
+				color: var(--muted);
+				line-height: 1.6;
+			}
+
+			.auth-list {
+				display: grid;
+				gap: 10px;
+				margin: 18px 0 0;
+				padding: 0;
+				list-style: none;
+			}
+
+			.auth-list li {
+				display: flex;
+				gap: 10px;
+				align-items: center;
+				padding: 10px 12px;
+				border-radius: 14px;
+				background: rgba(255, 255, 255, 0.03);
+				border: 1px solid rgba(148, 163, 184, 0.12);
+				color: #dbeafe;
+				font-size: 0.92rem;
+			}
+
+			.dot {
+				width: 9px;
+				height: 9px;
+				border-radius: 999px;
+				background: linear-gradient(135deg, #f97316, #38bdf8);
+				flex: 0 0 auto;
+			}
+
+			.signin-wrap {
+				padding: 12px;
+				border-radius: 20px;
+				background: rgba(2, 6, 23, 0.4);
+			}
+
+			.signin-wrap :global(.cl-rootBox) {
+				width: 100%;
+			}
+
+			.signin-wrap :global(.cl-card) {
+				box-shadow: none;
+				border: none;
+				width: 100%;
+			}
+
+			.signin-wrap :global(.cl-headerTitle) {
+				color: var(--text);
+			}
+
+			.signin-wrap :global(.cl-headerSubtitle),
+			.signin-wrap :global(.cl-socialButtonsBlockButtonText),
+			.signin-wrap :global(.cl-formFieldLabel),
+			.signin-wrap :global(.cl-footerActionText),
+			.signin-wrap :global(.cl-footerActionLink),
+			.signin-wrap :global(.cl-dividerText) {
+				color: #cbd5e1;
+			}
+
+			footer {
+				position: relative;
+				z-index: 1;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 18px;
+				padding: 0 28px 28px;
+				color: var(--muted);
+				font-size: 0.92rem;
+			}
+
+			.footer-stack {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 12px;
+			}
+
+			.pill {
+				padding: 8px 12px;
+				border-radius: 999px;
+				background: rgba(255, 255, 255, 0.03);
+				border: 1px solid rgba(148, 163, 184, 0.12);
+			}
+
+			@media (max-width: 1080px) {
+				.hero,
+				.dashboard-grid {
+					grid-template-columns: 1fr;
+				}
+
+				.semester {
+					grid-column: span 6;
+				}
+			}
+
+			@media (max-width: 720px) {
+				.shell {
+					padding: 14px;
+				}
+
+				.topbar,
+				.hero,
+				.section,
+				footer {
+					padding-left: 18px;
+					padding-right: 18px;
+				}
+
+				.hero {
+					padding-top: 18px;
+				}
+
+				.metrics {
+					grid-template-columns: 1fr;
+				}
+
+				.semester {
+					grid-column: span 12;
+				}
+
+				h1 {
+					max-width: none;
+				}
+
+				.user-chip {
+					padding-inline: 10px;
+				}
+			}
+		</style>
 	</head>
 	<body>
-		<h1>Astro</h1>
+		<main class="shell">
+			<div class="frame">
+				<header class="topbar">
+					<div class="brand">
+						<div class="brand-mark">G</div>
+						<div class="brand-copy">
+							<strong>Grad Planner</strong>
+							<span>Semester dashboard for college planning</span>
+						</div>
+					</div>
+
+					{isAuthenticated ? (
+						<div class="user-chip">
+							<div>
+								<div style="font-size: 0.88rem; color: var(--muted);">Signed in as</div>
+								<div style="font-weight: 700;">{displayName}</div>
+								{emailAddress ? <div style="font-size: 0.82rem; color: var(--muted);">{emailAddress}</div> : null}
+							</div>
+							<UserButton showName={false} />
+						</div>
+					) : (
+						<div class="user-chip">
+							<span style="color: var(--muted); font-size: 0.88rem;">Secure login enabled</span>
+						</div>
+					)}
+				</header>
+
+				{isAuthenticated ? (
+					<>
+						<section class="hero">
+							<div class="panel hero-panel">
+								<span class="kicker">Academic dashboard</span>
+								<h1>{user?.firstName ? `Welcome back, ${user.firstName}` : 'Welcome back'}</h1>
+								<p class="lead">
+									Track the semesters in your degree plan, keep your graduation path visible, and spot heavy-load terms
+									before they surprise you.
+								</p>
+
+								<div class="hero-actions">
+									<a class="button primary" href="#semesters">View semesters</a>
+									<a class="button secondary" href="#summary">Open degree summary</a>
+								</div>
+
+								<div class="metrics">
+									<div class="metric">
+										<span class="metric-label">Total planned credits</span>
+										<strong>{totalCredits}</strong>
+										<span>Across the semesters in your current plan</span>
+									</div>
+									<div class="metric">
+										<span class="metric-label">Degree status</span>
+										<strong>{degreeStatus}</strong>
+										<span>{currentSemester?.name} is the active term</span>
+									</div>
+									<div class="metric">
+										<span class="metric-label">Next checkpoint</span>
+										<strong>{upcomingSemester?.name}</strong>
+										<span>Registration prep + advising</span>
+									</div>
+									<div class="metric">
+										<span class="metric-label">Advisor note</span>
+										<strong>15-credit cadence</strong>
+										<span>Balanced load with one optional summer term</span>
+									</div>
+								</div>
+							</div>
+
+							<div class="side-stack">
+								<div class="panel side-card">
+									<h2>What to watch this term</h2>
+									<p>
+										Keep the systems core, capstone work, and the degree audit visible so you can adjust the next semester
+										before registration opens.
+									</p>
+									<div class="progress" aria-hidden="true">
+										<span style="width: 72%"></span>
+									</div>
+									<div class="tag-row">
+										<span class="tag">Advising ready</span>
+										<span class="tag">Registration list set</span>
+										<span class="tag">Audit clean</span>
+									</div>
+								</div>
+
+								<div class="panel side-card">
+									<h2>Planner snapshot</h2>
+									<p>
+										Your plan is organized around a final stretch of project work, one lighter summer option, and a steady
+										course load that keeps graduation on schedule.
+									</p>
+									<div class="tag-row">
+										<span class="tag">Major core</span>
+										<span class="tag">Capstone</span>
+										<span class="tag">Electives</span>
+									</div>
+								</div>
+							</div>
+						</section>
+
+						<section class="section" id="semesters">
+							<div class="section-head">
+								<div>
+									<h2>Your semesters</h2>
+									<p>A clean semester-by-semester view of the plan you are carrying toward graduation.</p>
+								</div>
+								<p>{semesters.length} terms mapped</p>
+							</div>
+
+							<div class="semesters">
+								{semesters.map((semester) => (
+									<article
+										class="semester"
+										style={`--semester-a: ${semester.accentStart}; --semester-b: ${semester.accentEnd};`}
+									>
+										<div class="semester-header">
+											<div>
+												<h3>{semester.name}</h3>
+												<p>{semester.note}</p>
+											</div>
+											<span class="badge">{semester.status}</span>
+										</div>
+
+										<div class="credits">
+											{semester.credits}
+											<small> credits</small>
+										</div>
+
+										<ul class="course-list">
+											{semester.courses.map((course) => <li>{course}</li>)}
+										</ul>
+
+										<div class="semester-progress">
+											<div style="display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 0.86rem;">
+												<span>Plan progress</span>
+												<span>{semester.progress}%</span>
+											</div>
+											<div class="track" aria-hidden="true">
+												<span style={`width: ${semester.progress}%`}></span>
+											</div>
+										</div>
+									</article>
+								))}
+							</div>
+						</section>
+
+						<section class="section" id="summary">
+							<div class="dashboard-grid">
+								<div class="panel summary-card">
+									<h2>Degree summary</h2>
+									<p style="margin: 0; color: var(--muted); line-height: 1.6;">
+										This dashboard gives you a quick read on where each term sits in the full graduation path, so you can
+										adjust credits, add electives, or shift heavy classes before the schedule hardens.
+									</p>
+
+									<ul>
+										<li>
+											<div>
+												<strong>Current term</strong>
+												<span>{currentSemester?.name} is the active semester on your plan.</span>
+											</div>
+											<em>{currentSemester?.credits} credits</em>
+										</li>
+										<li>
+											<div>
+												<strong>Next up</strong>
+												<span>{upcomingSemester?.name} is ready for registration review.</span>
+											</div>
+											<em>{upcomingSemester?.credits} credits</em>
+										</li>
+										<li>
+											<div>
+												<strong>Graduation focus</strong>
+												<span>Finalize upper-division coursework and confirm audit completion.</span>
+											</div>
+											<em>On track</em>
+										</li>
+									</ul>
+								</div>
+
+								<div class="panel summary-card">
+									<h2>Quick actions</h2>
+									<p style="margin: 0; color: var(--muted); line-height: 1.6;">
+										Use the user menu to manage your account, or keep extending the planner with saved semester data and
+										advisor notes.
+									</p>
+
+									<div class="tag-row" style="margin-top: 18px;">
+										<span class="tag">Open user menu</span>
+										<span class="tag">Add notes</span>
+										<span class="tag">Refine plan</span>
+									</div>
+								</div>
+							</div>
+						</section>
+					</>
+				) : (
+					<section class="hero">
+						<div class="panel hero-panel">
+							<span class="kicker">College app dashboard</span>
+							<h1>Plan every semester in one place</h1>
+							<p class="lead">
+								Sign in to view your semesters, keep your degree path organized, and keep track of the term
+								loads you still need to finish.
+							</p>
+
+							<div class="hero-actions">
+								<a class="button primary" href="#signin">Sign in to your planner</a>
+								<a class="button secondary" href="#signin">See the dashboard</a>
+							</div>
+
+							<div class="metrics">
+								<div class="metric">
+									<span class="metric-label">What you get</span>
+									<strong>Semester dashboard</strong>
+									<span>See current, planned, and optional terms at a glance</span>
+								</div>
+								<div class="metric">
+									<span class="metric-label">Authentication</span>
+									<strong>Secure login</strong>
+									<span>Fast sign-in flow with a built-in user button</span>
+								</div>
+							</div>
+						</div>
+
+						<div class="panel auth-card" id="signin">
+							<div class="auth-intro">
+								<span class="kicker">Start here</span>
+								<h2>Sign in to open your planner</h2>
+								<p>
+									Use the hosted sign-in to enter the dashboard. Once signed in, you’ll land on the semester view with
+									your schedule and graduation progress.
+								</p>
+							</div>
+
+							<div class="auth-shell">
+								<div class="signin-wrap">
+									<SignIn fallbackRedirectUrl="/" />
+								</div>
+							</div>
+
+							<ul class="auth-list">
+								<li><span class="dot"></span> Dashboard-first landing page</li>
+								<li><span class="dot"></span> Signed-in and signed-out states handled in Astro</li>
+								<li><span class="dot"></span> Ready for semester data and degree planning expansion</li>
+							</ul>
+						</div>
+					</section>
+				)}
+
+				<footer>
+					<div>Grad Planner</div>
+					<div class="footer-stack">
+						<span class="pill">Semester tracking</span>
+						<span class="pill">Authentication</span>
+						<span class="pill">Graduation planning</span>
+					</div>
+				</footer>
+			</div>
+		</main>
 	</body>
 </html>
