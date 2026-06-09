@@ -1,8 +1,18 @@
 BEGIN;
 
+DROP TABLE IF EXISTS student_term_courses CASCADE;
+DROP TABLE IF EXISTS student_terms CASCADE;
+DROP TABLE IF EXISTS student_plans CASCADE;
+DROP TABLE IF EXISTS students CASCADE;
+DROP TABLE IF EXISTS major_requirement_courses CASCADE;
+DROP TABLE IF EXISTS major_requirements CASCADE;
+DROP TABLE IF EXISTS course_prerequisites CASCADE;
+DROP TABLE IF EXISTS courses CASCADE;
+DROP TABLE IF EXISTS majors CASCADE;
+
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS majors (
+CREATE TABLE majors (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   code text NOT NULL UNIQUE,
   name text NOT NULL,
@@ -10,7 +20,7 @@ CREATE TABLE IF NOT EXISTS majors (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS courses (
+CREATE TABLE courses (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   course_code text NOT NULL UNIQUE,
   subject_code text NOT NULL,
@@ -22,7 +32,7 @@ CREATE TABLE IF NOT EXISTS courses (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS course_prerequisites (
+CREATE TABLE course_prerequisites (
   course_id uuid NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
   prerequisite_course_id uuid NOT NULL REFERENCES courses(id) ON DELETE RESTRICT,
   minimum_grade text NOT NULL DEFAULT 'C',
@@ -30,7 +40,7 @@ CREATE TABLE IF NOT EXISTS course_prerequisites (
   PRIMARY KEY (course_id, prerequisite_course_id)
 );
 
-CREATE TABLE IF NOT EXISTS major_requirements (
+CREATE TABLE major_requirements (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   major_id uuid NOT NULL REFERENCES majors(id) ON DELETE CASCADE,
   requirement_group text NOT NULL,
@@ -41,14 +51,14 @@ CREATE TABLE IF NOT EXISTS major_requirements (
   UNIQUE (major_id, requirement_group)
 );
 
-CREATE TABLE IF NOT EXISTS major_requirement_courses (
+CREATE TABLE major_requirement_courses (
   requirement_id uuid NOT NULL REFERENCES major_requirements(id) ON DELETE CASCADE,
   course_id uuid NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
   is_required boolean NOT NULL DEFAULT true,
   PRIMARY KEY (requirement_id, course_id)
 );
 
-CREATE TABLE IF NOT EXISTS students (
+CREATE TABLE students (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   clerk_user_id text NOT NULL UNIQUE,
   display_name text,
@@ -56,7 +66,7 @@ CREATE TABLE IF NOT EXISTS students (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS student_plans (
+CREATE TABLE student_plans (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id uuid NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   major_id uuid NOT NULL REFERENCES majors(id) ON DELETE RESTRICT,
@@ -69,7 +79,7 @@ CREATE TABLE IF NOT EXISTS student_plans (
   UNIQUE (student_id, major_id, catalog_year)
 );
 
-CREATE TABLE IF NOT EXISTS student_terms (
+CREATE TABLE student_terms (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   plan_id uuid NOT NULL REFERENCES student_plans(id) ON DELETE CASCADE,
   term_label text NOT NULL,
@@ -81,7 +91,7 @@ CREATE TABLE IF NOT EXISTS student_terms (
   UNIQUE (plan_id, term_label)
 );
 
-CREATE TABLE IF NOT EXISTS student_term_courses (
+CREATE TABLE student_term_courses (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   student_term_id uuid NOT NULL REFERENCES student_terms(id) ON DELETE CASCADE,
   course_id uuid NOT NULL REFERENCES courses(id) ON DELETE RESTRICT,
@@ -96,8 +106,7 @@ CREATE TABLE IF NOT EXISTS student_term_courses (
 INSERT INTO majors (code, name, description)
 VALUES
   ('CS', 'Computer Science', 'Software, systems, algorithms, and computing theory.'),
-  ('CYB', 'Cybersecurity', 'Network defense, secure systems, and digital forensics.')
-ON CONFLICT (code) DO NOTHING;
+  ('CYB', 'Cybersecurity', 'Network defense, secure systems, and digital forensics.');
 
 INSERT INTO courses (course_code, subject_code, course_number, title, credits, description)
 VALUES
@@ -126,8 +135,7 @@ VALUES
   ('ENG 102', 'ENG', '102', 'College Composition II', 3, 'Research-based writing and source integration.'),
   ('COMM 130', 'COMM', '130', 'Public Speaking', 3, 'Organization, delivery, and audience adaptation in oral presentations.'),
   ('HIST 110', 'HIST', '110', 'World Civilization', 3, 'Survey of major world civilizations and historical developments.'),
-  ('PHYS 121', 'PHYS', '121', 'University Physics I', 4, 'Mechanics, motion, forces, and energy.')
-ON CONFLICT (course_code) DO NOTHING;
+  ('PHYS 121', 'PHYS', '121', 'University Physics I', 4, 'Mechanics, motion, forces, and energy.');
 
 INSERT INTO course_prerequisites (course_id, prerequisite_course_id, minimum_grade, notes)
 SELECT c.id, p.id, 'C', ''
@@ -159,8 +167,7 @@ FROM (
     ('STAT 240', 'MATH 175')
 ) AS prereq(course_code, prerequisite_code)
 JOIN courses c ON c.course_code = prereq.course_code
-JOIN courses p ON p.course_code = prereq.prerequisite_code
-ON CONFLICT (course_id, prerequisite_course_id) DO NOTHING;
+JOIN courses p ON p.course_code = prereq.prerequisite_code;
 
 INSERT INTO major_requirements (major_id, requirement_group, requirement_type, required_credits, sort_order, notes)
 SELECT m.id, req.requirement_group, req.requirement_type, req.required_credits, req.sort_order, req.notes
@@ -178,8 +185,7 @@ JOIN (
     ('CYB', 'Communication and Writing', 'general_education', NULL::smallint, 40, 'Writing and communication support courses.'),
     ('CYB', 'Security Electives', 'elective', 9::smallint, 50, 'Choose advanced security electives.')
 ) AS req(major_code, requirement_group, requirement_type, required_credits, sort_order, notes)
-  ON req.major_code = m.code
-ON CONFLICT (major_id, requirement_group) DO NOTHING;
+  ON req.major_code = m.code;
 
 INSERT INTO major_requirement_courses (requirement_id, course_id, is_required)
 SELECT mr.id, c.id, true
@@ -223,7 +229,6 @@ JOIN (
 ) AS req_courses(major_code, requirement_group, course_code)
   ON req_courses.major_code = m.code
  AND req_courses.requirement_group = mr.requirement_group
-JOIN courses c ON c.course_code = req_courses.course_code
-ON CONFLICT (requirement_id, course_id) DO NOTHING;
+JOIN courses c ON c.course_code = req_courses.course_code;
 
 COMMIT;
